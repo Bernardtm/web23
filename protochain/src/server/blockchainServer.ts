@@ -1,12 +1,19 @@
-import express from 'express';
+import dotenv from 'dotenv';
+dotenv.config();
+import express, { Request, Response, NextFunction } from 'express';
 import morgan from 'morgan';
 import Blockchain from '../lib/blockchain';
+import Block from '../lib/block';
 
-const PORT: number = 3000;
+/* c8 ignore next */
+const PORT: number = parseInt(`${process.env.BLOCKCHAIN_PORT || 3000}`);
 
 const app = express();
 
-app.use(morgan('tiny'));
+/* c8 ignore start */
+if (process.argv.includes('--run')) app.use(morgan('tiny'));
+/* c8 ignore end */
+
 app.use(express.json());
 
 const blockchain = new Blockchain();
@@ -17,6 +24,10 @@ app.get('/status', (req, res, next) => {
         isValid: blockchain.isValid(),
         lastBlock: blockchain.getLastBlock()
     })
+})
+
+app.get('/blocks/next', (req: Request, res: Response, next: NextFunction) => {
+    return res.json(blockchain.getNextBlock());
 })
 
 app.get('/blocks/:indexOrHash', (req, res, next) => {
@@ -33,6 +44,21 @@ app.get('/blocks/:indexOrHash', (req, res, next) => {
     }
 })
 
-app.listen(PORT, () => {
-    console.log(`Blockchain server is running at ${PORT}`);
+app.post('/blocks', (req, res, next) => {
+    if (req.body.hash === undefined) return res.sendStatus(422);
+
+    const block = new Block(req.body as Block);
+    const validation = blockchain.addBlock(block);
+
+    if (validation.success) {
+        return res.status(201).json(block);
+    } else {
+        res.status(400).json(validation);
+    }
 })
+
+/* c8 ignore start */
+if (process.argv.includes('--run')) app.listen(PORT, () => { console.log(`Blockchain server is running at ${PORT}`); })
+/* c8 ignore end */
+
+export { app }
